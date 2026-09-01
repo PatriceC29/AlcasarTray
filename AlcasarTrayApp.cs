@@ -59,7 +59,7 @@ namespace AlcasarTray
             // NotifyIcon (icône systray)
             notifyIcon = new NotifyIcon
             {
-                Icon = SystemIcons.Information,
+                Icon = SystemIcons.Error,
                 Visible = true,
                 Text = "Alcasar Tray - Déconnecté"
             };
@@ -162,7 +162,7 @@ namespace AlcasarTray
                 }
                 else
                 {
-                    SetStatus("Connecté ✓");
+                    SetStatus("Connecté ✓", connected: true);
                 }
             }
             catch (Exception ex)
@@ -211,7 +211,7 @@ namespace AlcasarTray
 
                 if (response.IsSuccessStatusCode && !IsLoginPage(resultHtml))
                 {
-                    SetStatus("Connecté ✓");
+                    SetStatus("Connecté ✓", connected: true);
                 }
                 else
                 {
@@ -224,9 +224,10 @@ namespace AlcasarTray
             }
         }
 
-        private void SetStatus(string status)
+        private void SetStatus(string status, bool connected = false)
         {
             notifyIcon.Text = $"Alcasar Tray - {status}";
+            notifyIcon.Icon = connected ? SystemIcons.Information : SystemIcons.Error;
         }
 
         private void ShowStatus()
