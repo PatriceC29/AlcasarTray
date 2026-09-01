@@ -5,8 +5,11 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.IO;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using System.Security.Cryptography;
 
 namespace AlcasarTray
 {
@@ -20,6 +23,7 @@ namespace AlcasarTray
         private AlcasarConfig config = new AlcasarConfig();
         private Form hiddenForm;
         private bool? lastConnected;
+        private bool manuallyDisconnected;
 
         public AlcasarTrayApp()
         {
@@ -70,6 +74,7 @@ namespace AlcasarTray
             menu.Items.Add("État", null, (_, _) => ShowStatus());
             menu.Items.Add("-");
             menu.Items.Add("Reconnecter", null, async (_, _) => await KeepAliveAsync(promptIfMissing: true));
+            menu.Items.Add("Déconnecter", null, async (_, _) => await LogoffAsync());
             menu.Items.Add("Configurer", null, (_, _) => ShowConfigDialog());
             menu.Items.Add("Changer d'utilisateur", null, async (_, _) => await ChangeUserAsync());
             menu.Items.Add("-");
@@ -96,6 +101,23 @@ namespace AlcasarTray
             await KeepAliveAsync(promptIfMissing: true);
         }
 
+        // Le logoff Alcasar/chilli se fait sur un port dédié (3991 par convention), pas via intercept.php.
+        private async Task LogoffAsync()
+        {
+            try
+            {
+                var host = new Uri(config.PortalUrl).Host;
+                var logoffUrl = new UriBuilder("https", host, 3991, "logoff").Uri;
+                await client.GetAsync(logoffUrl);
+                manuallyDisconnected = true;
+                SetStatus("Déconnecté", connected: false);
+            }
+            catch (Exception ex)
+            {
+                SetStatus($"Erreur déconnexion: {ex.Message}");
+            }
+        }
+
         private void LoadConfig()
         {
             var directory = Path.GetDirectoryName(configPath);
@@ -108,6 +130,7 @@ namespace AlcasarTray
             {
                 var json = File.ReadAllText(configPath);
                 config = JsonSerializer.Deserialize<AlcasarConfig>(json) ?? new AlcasarConfig();
+                config.Password = UnprotectPassword(config.EncryptedPassword);
             }
             else
             {
@@ -124,12 +147,53 @@ namespace AlcasarTray
                 Directory.CreateDirectory(directory);
             }
 
+            config.EncryptedPassword = ProtectPassword(config.Password);
             var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(configPath, json);
         }
 
+        // DPAPI : chiffre le mot de passe pour l'utilisateur Windows courant, sans clé à gérer.
+        // Illisible pour un autre utilisateur ou sur une autre machine (par design).
+        private static string ProtectPassword(string password)
+        {
+            if (string.IsNullOrEmpty(password))
+            {
+                return "";
+            }
+            var protectedBytes = ProtectedData.Protect(Encoding.UTF8.GetBytes(password), null, DataProtectionScope.CurrentUser);
+            return Convert.ToBase64String(protectedBytes);
+        }
+
+        private static string UnprotectPassword(string encryptedPassword)
+        {
+            if (string.IsNullOrEmpty(encryptedPassword))
+            {
+                return "";
+            }
+            try
+            {
+                var bytes = ProtectedData.Unprotect(Convert.FromBase64String(encryptedPassword), null, DataProtectionScope.CurrentUser);
+                return Encoding.UTF8.GetString(bytes);
+            }
+            catch (CryptographicException)
+            {
+                return "";
+            }
+        }
+
         public async Task KeepAliveAsync(bool promptIfMissing = false)
         {
+            // Un déclencheur interactif (double-clic, "Reconnecter") vaut consentement explicite
+            // à se reconnecter ; sinon le timer de fond respecte la déconnexion manuelle.
+            if (promptIfMissing)
+            {
+                manuallyDisconnected = false;
+            }
+            else if (manuallyDisconnected)
+            {
+                return;
+            }
+
             if (string.IsNullOrEmpty(config.PortalUrl))
             {
                 SetStatus("Configuration manquante");
@@ -320,7 +384,13 @@ namespace AlcasarTray
     {
         public string PortalUrl { get; set; } = "https://alcasar.localdomain/";
         public string Username { get; set; } = "";
+
+        [JsonIgnore]
         public string Password { get; set; } = "";
+
+        // Mot de passe chiffré via DPAPI (Windows), stocké à la place du texte en clair.
+        public string EncryptedPassword { get; set; } = "";
+
         public int CheckIntervalSeconds { get; set; } = 60;
     }
 }
