@@ -130,15 +130,17 @@ namespace AlcasarTray
             {
                 SetStatus("Vérification...");
 
-                var response = await client.GetAsync(config.PortalUrl);
+                // La page racine (index.php) n'est qu'un statut : le vrai point d'entrée,
+                // qui redirige vers le formulaire ou la confirmation "déjà connecté", est intercept.php.
+                var interceptUrl = new Uri(new Uri(config.PortalUrl), "intercept.php");
+                var response = await client.GetAsync(interceptUrl);
                 var html = await response.Content.ReadAsStringAsync();
 
-                // Vérifier si on est sur la page de login (intercept.php d'Alcasar)
                 if (IsLoginPage(html))
                 {
                     if (!string.IsNullOrEmpty(config.Username) && !string.IsNullOrEmpty(config.Password))
                     {
-                        await LoginAsync(html, config.Username, config.Password);
+                        await LoginAsync(interceptUrl, html, config.Username, config.Password);
                     }
                     else
                     {
@@ -159,29 +161,29 @@ namespace AlcasarTray
         // Le formulaire de login d'intercept.php (Alcasar) contient toujours ce champ.
         private bool IsLoginPage(string html)
         {
-            return html.Contains("name=\"UserName\"", StringComparison.Ordinal);
+            return html.Contains("name=\"username\"", StringComparison.Ordinal);
         }
 
         // intercept.php calcule lui-même le hash CHAP côté serveur : on lui repasse
-        // simplement les champs cachés qu'il a fournis avec UserName/Password en clair.
+        // simplement les champs cachés qu'il a fournis avec username/password en clair.
         private static string? ExtractHiddenField(string html, string fieldName)
         {
             var match = Regex.Match(html, $"name=\"{fieldName}\"\\s+value=\"([^\"]*)\"");
             return match.Success ? match.Groups[1].Value : null;
         }
 
-        private async Task LoginAsync(string loginPageHtml, string username, string password)
+        private async Task LoginAsync(Uri interceptUrl, string loginPageHtml, string username, string password)
         {
             try
             {
                 var formData = new Dictionary<string, string>
                 {
-                    ["UserName"] = username,
-                    ["Password"] = password,
-                    ["button"] = "Connexion"
+                    ["username"] = username,
+                    ["password"] = password,
+                    ["button"] = "Authentication"
                 };
 
-                foreach (var field in new[] { "challenge", "uamip", "uamport", "userurl" })
+                foreach (var field in new[] { "challenge", "userurl" })
                 {
                     var value = ExtractHiddenField(loginPageHtml, field);
                     if (value != null)
@@ -191,7 +193,7 @@ namespace AlcasarTray
                 }
 
                 var content = new FormUrlEncodedContent(formData);
-                var response = await client.PostAsync(config.PortalUrl, content);
+                var response = await client.PostAsync(interceptUrl, content);
                 var resultHtml = await response.Content.ReadAsStringAsync();
 
                 if (response.IsSuccessStatusCode && !IsLoginPage(resultHtml))
@@ -295,7 +297,7 @@ namespace AlcasarTray
 
     public class AlcasarConfig
     {
-        public string PortalUrl { get; set; } = "https://portal.alcasar.local/";
+        public string PortalUrl { get; set; } = "https://alcasar.localdomain/";
         public string Username { get; set; } = "";
         public string Password { get; set; } = "";
         public int CheckIntervalSeconds { get; set; } = 60;
