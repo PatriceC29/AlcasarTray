@@ -68,13 +68,14 @@ namespace AlcasarTray
             var menu = new ContextMenuStrip();
             menu.Items.Add("État", null, (_, _) => ShowStatus());
             menu.Items.Add("-");
-            menu.Items.Add("Reconnecter", null, async (_, _) => await KeepAliveAsync());
+            menu.Items.Add("Reconnecter", null, async (_, _) => await KeepAliveAsync(promptIfMissing: true));
             menu.Items.Add("Configurer", null, (_, _) => ShowConfigDialog());
+            menu.Items.Add("Changer d'utilisateur", null, async (_, _) => await ChangeUserAsync());
             menu.Items.Add("-");
             menu.Items.Add("Quitter", null, (_, _) => Application.Exit());
 
             notifyIcon.ContextMenuStrip = menu;
-            notifyIcon.DoubleClick += async (_, _) => await KeepAliveAsync();
+            notifyIcon.DoubleClick += async (_, _) => await KeepAliveAsync(promptIfMissing: true);
 
             // Timer de vérification
             timer = new System.Windows.Forms.Timer();
@@ -82,8 +83,16 @@ namespace AlcasarTray
             timer.Tick += async (_, _) => await KeepAliveAsync();
             timer.Start();
 
-            // Vérification initiale
-            _ = KeepAliveAsync();
+            // Vérification initiale : demande les identifiants si absents (premier lancement)
+            _ = KeepAliveAsync(promptIfMissing: true);
+        }
+
+        private async Task ChangeUserAsync()
+        {
+            config.Username = "";
+            config.Password = "";
+            SaveConfig();
+            await KeepAliveAsync(promptIfMissing: true);
         }
 
         private void LoadConfig()
@@ -118,11 +127,22 @@ namespace AlcasarTray
             File.WriteAllText(configPath, json);
         }
 
-        public async Task KeepAliveAsync()
+        public async Task KeepAliveAsync(bool promptIfMissing = false)
         {
             if (string.IsNullOrEmpty(config.PortalUrl))
             {
                 SetStatus("Configuration manquante");
+                return;
+            }
+
+            if (promptIfMissing && (string.IsNullOrEmpty(config.Username) || string.IsNullOrEmpty(config.Password)))
+            {
+                ShowConfigDialog();
+            }
+
+            if (string.IsNullOrEmpty(config.Username) || string.IsNullOrEmpty(config.Password))
+            {
+                SetStatus("Authentification requise");
                 return;
             }
 
@@ -138,14 +158,7 @@ namespace AlcasarTray
 
                 if (IsLoginPage(html))
                 {
-                    if (!string.IsNullOrEmpty(config.Username) && !string.IsNullOrEmpty(config.Password))
-                    {
-                        await LoginAsync(interceptUrl, html, config.Username, config.Password);
-                    }
-                    else
-                    {
-                        SetStatus("Authentification requise");
-                    }
+                    await LoginAsync(interceptUrl, html, config.Username, config.Password);
                 }
                 else
                 {
