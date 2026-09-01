@@ -19,6 +19,7 @@ namespace AlcasarTray
         private readonly string configPath;
         private AlcasarConfig config = new AlcasarConfig();
         private Form hiddenForm;
+        private bool? lastConnected;
 
         public AlcasarTrayApp()
         {
@@ -229,9 +230,10 @@ namespace AlcasarTray
         private void SetStatus(string status, bool? connected = false)
         {
             notifyIcon.Text = $"Alcasar Tray - {status}";
-            if (connected.HasValue)
+            if (connected.HasValue && connected != lastConnected)
             {
                 notifyIcon.Icon = connected.Value ? SystemIcons.Information : SystemIcons.Error;
+                lastConnected = connected;
             }
         }
 
