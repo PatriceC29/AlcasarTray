@@ -72,6 +72,7 @@ namespace AlcasarTray
             // Menu contextuel
             var menu = new ContextMenuStrip();
             menu.Items.Add("État", null, (_, _) => ShowStatus());
+            menu.Items.Add("Historique des connexions", null, async (_, _) => await ShowConnectionHistoryAsync());
             menu.Items.Add("-");
             menu.Items.Add("Reconnecter", null, async (_, _) => await KeepAliveAsync(promptIfMissing: true));
             menu.Items.Add("Déconnecter", null, async (_, _) => await LogoffAsync());
@@ -309,6 +310,64 @@ namespace AlcasarTray
                 $"État: {notifyIcon.Text}",
                 "État Alcasar Tray"
             );
+        }
+
+        // L'historique est affiché par index.php (page racine), sous forme de <li>"date (durée)"</li>.
+        private async Task ShowConnectionHistoryAsync()
+        {
+            try
+            {
+                var response = await client.GetAsync(config.PortalUrl);
+                var html = await response.Content.ReadAsStringAsync();
+                var entries = Regex.Matches(html, "<li[^>]*>([^<]+)</li>")
+                    .Select(m => m.Groups[1].Value.Trim())
+                    .ToList();
+
+                var grid = new DataGridView
+                {
+                    Dock = DockStyle.Fill,
+                    ReadOnly = true,
+                    AllowUserToAddRows = false,
+                    AllowUserToDeleteRows = false,
+                    AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+                    SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+                    AlternatingRowsDefaultCellStyle = new DataGridViewCellStyle { BackColor = Color.WhiteSmoke }
+                };
+                grid.Columns.Add("Date", "Date/heure");
+                grid.Columns.Add("Duree", "Durée");
+
+                foreach (var entry in entries)
+                {
+                    var match = Regex.Match(entry, @"^(.*?)\s*\(([^)]*)\)\s*$");
+                    if (match.Success)
+                    {
+                        grid.Rows.Add(match.Groups[1].Value.Trim(), match.Groups[2].Value.Trim());
+                    }
+                    else
+                    {
+                        grid.Rows.Add(entry, "");
+                    }
+                }
+
+                if (grid.Rows.Count == 0)
+                {
+                    grid.Rows.Add("Aucun historique disponible", "");
+                }
+
+                var form = new Form
+                {
+                    Text = "Historique des connexions",
+                    Width = 420,
+                    Height = 280,
+                    StartPosition = FormStartPosition.CenterScreen
+                };
+                form.Controls.Add(grid);
+                form.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Erreur: {ex.Message}", "Historique des connexions");
+            }
         }
 
         private void ShowConfigDialog()
