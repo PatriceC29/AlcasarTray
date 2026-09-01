@@ -1,0 +1,28 @@
+# Build results
+bin/
+obj/
+*.dll
+*.exe
+*.pdb
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.sln.docstates
+
+# IDE
+.vscode/
+*.code-workspace
+
+# Runtime
+appsettings.local.json
+config.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
