@@ -148,7 +148,7 @@ namespace AlcasarTray
 
             try
             {
-                SetStatus("Vérification...");
+                SetStatus("Vérification...", connected: null);
 
                 // La page racine (index.php) n'est qu'un statut : le vrai point d'entrée,
                 // qui redirige vers le formulaire ou la confirmation "déjà connecté", est intercept.php.
@@ -224,10 +224,15 @@ namespace AlcasarTray
             }
         }
 
-        private void SetStatus(string status, bool connected = false)
+        // connected: null pendant une vérification en cours, pour ne pas faire clignoter
+        // l'icône avant qu'un état définitif (connecté ou non) soit confirmé.
+        private void SetStatus(string status, bool? connected = false)
         {
             notifyIcon.Text = $"Alcasar Tray - {status}";
-            notifyIcon.Icon = connected ? SystemIcons.Information : SystemIcons.Error;
+            if (connected.HasValue)
+            {
+                notifyIcon.Icon = connected.Value ? SystemIcons.Information : SystemIcons.Error;
+            }
         }
 
         private void ShowStatus()
