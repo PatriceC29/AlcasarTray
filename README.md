@@ -63,12 +63,11 @@ AlcasarTray/
 ## 📝 Notes
 
 - Les certificats SSL non valides sont acceptés (développement)
-- Les identifiants sont stockés localement en clair (à sécuriser en production)
+- Le mot de passe est chiffré via DPAPI (Windows), lié à l'utilisateur/machine courants
 - La connexion utilise des cookies HTTP standards
 
 ## 🚀 Améliorations futures
 
-- Chiffrement des identifiants
 - Notification système
 - Historique des connexions
 - Mode développement pour debug
