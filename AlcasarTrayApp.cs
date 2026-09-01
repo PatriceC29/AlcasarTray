@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.IO;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace AlcasarTray
 {
@@ -132,12 +133,12 @@ namespace AlcasarTray
                 var response = await client.GetAsync(config.PortalUrl);
                 var html = await response.Content.ReadAsStringAsync();
 
-                // Vérifier si on est sur la page de login
+                // Vérifier si on est sur la page de login (intercept.php d'Alcasar)
                 if (IsLoginPage(html))
                 {
                     if (!string.IsNullOrEmpty(config.Username) && !string.IsNullOrEmpty(config.Password))
                     {
-                        await LoginAsync(config.Username, config.Password);
+                        await LoginAsync(html, config.Username, config.Password);
                     }
                     else
                     {
@@ -155,28 +156,45 @@ namespace AlcasarTray
             }
         }
 
+        // Le formulaire de login d'intercept.php (Alcasar) contient toujours ce champ.
         private bool IsLoginPage(string html)
         {
-            return html.Contains("login", StringComparison.OrdinalIgnoreCase) ||
-                   html.Contains("identifiant", StringComparison.OrdinalIgnoreCase) ||
-                   html.Contains("mot de passe", StringComparison.OrdinalIgnoreCase) ||
-                   html.Contains("connexion", StringComparison.OrdinalIgnoreCase);
+            return html.Contains("name=\"UserName\"", StringComparison.Ordinal);
         }
 
-        private async Task LoginAsync(string username, string password)
+        // intercept.php calcule lui-même le hash CHAP côté serveur : on lui repasse
+        // simplement les champs cachés qu'il a fournis avec UserName/Password en clair.
+        private static string? ExtractHiddenField(string html, string fieldName)
+        {
+            var match = Regex.Match(html, $"name=\"{fieldName}\"\\s+value=\"([^\"]*)\"");
+            return match.Success ? match.Groups[1].Value : null;
+        }
+
+        private async Task LoginAsync(string loginPageHtml, string username, string password)
         {
             try
             {
                 var formData = new Dictionary<string, string>
                 {
-                    ["login"] = username,
-                    ["password"] = password
+                    ["UserName"] = username,
+                    ["Password"] = password,
+                    ["button"] = "Connexion"
                 };
+
+                foreach (var field in new[] { "challenge", "uamip", "uamport", "userurl" })
+                {
+                    var value = ExtractHiddenField(loginPageHtml, field);
+                    if (value != null)
+                    {
+                        formData[field] = value;
+                    }
+                }
 
                 var content = new FormUrlEncodedContent(formData);
                 var response = await client.PostAsync(config.PortalUrl, content);
+                var resultHtml = await response.Content.ReadAsStringAsync();
 
-                if (response.IsSuccessStatusCode)
+                if (response.IsSuccessStatusCode && !IsLoginPage(resultHtml))
                 {
                     SetStatus("Connecté ✓");
                 }
