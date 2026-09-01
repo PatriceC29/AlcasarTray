@@ -17,7 +17,7 @@ namespace AlcasarTray
         private readonly HttpClient client;
         private System.Windows.Forms.Timer timer;
         private readonly string configPath;
-        private AlcasarConfig config;
+        private AlcasarConfig config = new AlcasarConfig();
         private Form hiddenForm;
 
         public AlcasarTrayApp()
