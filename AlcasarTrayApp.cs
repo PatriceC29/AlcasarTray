@@ -77,7 +77,6 @@ namespace AlcasarTray
             menu.Items.Add("Reconnecter", null, async (_, _) => await KeepAliveAsync(promptIfMissing: true));
             menu.Items.Add("Déconnecter", null, async (_, _) => await LogoffAsync());
             menu.Items.Add("Configurer", null, (_, _) => ShowConfigDialog());
-            menu.Items.Add("Changer d'utilisateur", null, async (_, _) => await ChangeUserAsync());
             menu.Items.Add("-");
             menu.Items.Add("Quitter", null, (_, _) => Application.Exit());
 
@@ -92,14 +91,6 @@ namespace AlcasarTray
 
             // Vérification initiale : demande les identifiants si absents (premier lancement)
             _ = KeepAliveAsync(promptIfMissing: true);
-        }
-
-        private async Task ChangeUserAsync()
-        {
-            config.Username = "";
-            config.Password = "";
-            SaveConfig();
-            await KeepAliveAsync(promptIfMissing: true);
         }
 
         // Le logoff Alcasar/chilli se fait sur un port dédié (3991 par convention), pas via intercept.php.
